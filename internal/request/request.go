@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 
 	"github.com/red7-c/httpfromtcp/internal/headers"
 )
@@ -18,6 +19,7 @@ type Request struct {
 	RequestLine RequestLine
 	Headers     *headers.Headers
 	State       parserState
+	Body        string
 }
 
 type parserState string
@@ -27,6 +29,7 @@ const (
 	StateDone   parserState = "done"
 	StateError  parserState = "error"
 	StateHeader parserState = "headers"
+	StateBody   parserState = "Body"
 )
 
 var ErrorMalformedRequestLine = fmt.Errorf("malformed request line")
@@ -38,11 +41,24 @@ func newRequest() *Request {
 	return &Request{
 		State:   StateInit,
 		Headers: headers.NewHeaders(),
+		Body: "",
 	}
 }
 
 func (r *Request) Done() bool {
 	return r.State == StateDone || r.State == StateError
+}
+
+func getInt(headers *headers.Headers, name string, defaultValue int) int {
+	valuestr, exist := headers.Get(name)
+	if !exist {
+		return defaultValue
+	}
+	value, err := strconv.Atoi(valuestr)
+	if err != nil {
+		return defaultValue
+	}
+	return value
 }
 
 func parseRequestLine(b []byte) (*RequestLine, int, error) {
@@ -115,9 +131,16 @@ outer:
 			read += n
 
 			if done {
+				r.State = StateBody
+			}
+		case StateBody:
+			length := getInt(r.Headers, "content-length", 0)
+			if length == 0 {
 				r.State = StateDone
 			}
 
+
+	
 		case StateDone:
 			break outer
 		default:
