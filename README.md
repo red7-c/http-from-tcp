@@ -33,7 +33,7 @@ This implementation is based on the specification for **HTTP/1.1**. While newer 
     ```bash
     curl -v localhost:42069
     ```
-4. As of this moment the parsed ouput of the curl command is displayed in the terminal.
+4.  As of this moment the parsed ouput of the curl command is displayed in the terminal.
 
 ## Relevant RFCs
 
