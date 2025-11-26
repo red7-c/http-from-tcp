@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+
+	"github.com/red7-c/httpfromtcp/internal/headers"
 )
 
 type RequestLine struct {
@@ -14,14 +16,17 @@ type RequestLine struct {
 
 type Request struct {
 	RequestLine RequestLine
+	Headers     *headers.Headers
 	State       parserState
 }
 
 type parserState string
+
 const (
-	StateInit  parserState = "init"
-	StateDone  parserState = "done"
-	StateError parserState = "error"
+	StateInit   parserState = "init"
+	StateDone   parserState = "done"
+	StateError  parserState = "error"
+	StateHeader parserState = "headers"
 )
 
 var ErrorMalformedRequestLine = fmt.Errorf("malformed request line")
@@ -31,7 +36,8 @@ var SP = []byte("\r\n")
 
 func newRequest() *Request {
 	return &Request{
-		State: StateInit,
+		State:   StateInit,
+		Headers: headers.NewHeaders(),
 	}
 }
 
@@ -75,11 +81,13 @@ func (r *Request) parse(data []byte) (int, error) {
 	read := 0
 outer:
 	for {
+		currentData := data[read:]
 		switch r.State {
+
 		case StateError:
 			return 0, ErrorRequestInErrorState
 		case StateInit:
-			rl, n, err := parseRequestLine(data[read:])
+			rl, n, err := parseRequestLine(currentData)
 
 			if err != nil {
 				r.State = StateError
@@ -92,10 +100,28 @@ outer:
 
 			r.RequestLine = *rl
 			read += n
-			r.State = StateDone
+			r.State = StateHeader
+		case StateHeader:
+			n, done, err := r.Headers.Parse(currentData)
+
+			if err != nil {
+				return 0, err
+			}
+
+			if n == 0 {
+				break outer
+			}
+
+			read += n
+
+			if done {
+				r.State = StateDone
+			}
 
 		case StateDone:
 			break outer
+		default:
+			panic("well well well...")
 		}
 	}
 	return read, nil
